@@ -1,0 +1,131 @@
+"""
+Created on Mon, Apr 2024
+@author: Beatriz Yonara
+"""
+
+import tkinter as tk
+from tkinter import filedialog
+import pandas as pd
+from datetime import datetime, timedelta
+
+class OpeningScreen:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("MultiStopwatch")
+        self.master.geometry("300x200")
+        
+        label = tk.Label(master, text="MultiStopwatch", font=("Arial", 24))
+        label.pack(pady=50)
+        
+        start_button = tk.Button(master, text="Start", command=self.open_stopwatch)
+        start_button.pack()
+        
+    def open_stopwatch(self):
+        self.master.destroy()
+        root = tk.Tk()
+        app = MultiStopwatch(root)
+        root.mainloop()
+
+class MultiStopwatch:
+    def __init__(self, master):
+        self.master = master
+        self.master.title("MultiStopwatch")
+        self.master.geometry("600x400")
+        
+        self.timers = [timedelta(), timedelta(), timedelta(), timedelta()]
+        self.current_timer = None
+        self.timer_labels = []
+        
+        self.running = False
+        self.last_start_time = datetime.now()
+        
+        self.display_frame = tk.Frame(master)
+        self.display_frame.pack(pady=10)
+        
+        for i in range(4):
+            timer_label = tk.Label(self.display_frame, text=f"Timer {i+1}: 00:00:00.000", font=("Arial", 16))
+            timer_label.grid(row=i, column=0, padx=10, pady=5, sticky="w")
+            self.timer_labels.append(timer_label)
+        
+        self.start_button = tk.Button(master, text="Start/Stop", command=self.toggle_timer)
+        self.start_button.pack(pady=5)
+        
+        self.reset_button = tk.Button(master, text="Reset", command=self.reset_timer)
+        self.reset_button.pack(pady=5)
+        
+        self.save_as_button = tk.Button(master, text="Save As", command=self.save_time_as)
+        self.save_as_button.pack(pady=5)
+        
+        self.master.bind("<KeyPress-1>", lambda event: self.handle_keypress(0))
+        self.master.bind("<KeyPress-2>", lambda event: self.handle_keypress(1))
+        self.master.bind("<KeyPress-3>", lambda event: self.handle_keypress(2))
+        self.master.bind("<KeyPress-4>", lambda event: self.handle_keypress(3))
+        
+        self.master.bind("<space>", self.toggle_timer)
+        
+        self.update_display()
+        
+    def update_display(self):
+        if self.running and self.current_timer is not None:
+            now = datetime.now()
+            self.timers[self.current_timer] += now - self.last_start_time
+            self.last_start_time = now
+        
+        for i, timer in enumerate(self.timers):
+            time_string = self.format_time(timer)
+            self.timer_labels[i].config(text=f"Timer {i+1}: {time_string}")
+        
+        self.master.after(100, self.update_display)
+        
+    def format_time(self, delta):
+        seconds = int(delta.total_seconds())
+        hours, seconds = divmod(seconds, 3600)
+        minutes, seconds = divmod(seconds, 60)
+        milliseconds = int(delta.microseconds / 1000)
+        return f"{hours:02d}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}"
+    
+    def toggle_timer(self, event=None):
+        if not self.running:
+            self.running = True
+            self.last_start_time = datetime.now()
+        else:
+            self.running = False
+            if self.current_timer is not None:
+                now = datetime.now()
+                self.timers[self.current_timer] += now - self.last_start_time
+        
+    def reset_timer(self):
+        self.timers = [timedelta() for _ in range(4)]
+        self.current_timer = None
+        self.running = False
+        self.update_display()
+    
+    def save_time_as(self):
+        file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV Files", "*.csv")])
+        if file_path:
+            data = [["Time", "Timer 1", "Timer 2", "Timer 3", "Timer 4"]]
+            total_times = [0] * 4
+
+            max_time = max([int(timer.total_seconds() // 60) for timer in self.timers])
+            
+            for i in range(max_time + 1):
+                minutes = f"{i:02d} min"
+                times = [self.format_time(timer)[0:8] if total_times[idx] < i else "0.0" for idx, timer in enumerate(self.timers)]
+                data.append([minutes] + times)
+                total_times = [min(i, total_times[idx]) for idx, i in enumerate(total_times)]
+
+            total_row = ["Total"] + [self.format_time(timedelta(minutes=sum(total_times))) for _ in range(4)]
+            data.append(total_row)
+
+            df = pd.DataFrame(data)
+            df.to_csv(file_path, index=False, header=False)
+        
+    def handle_keypress(self, timer_index):
+        self.current_timer = timer_index
+        if not self.running:
+            self.toggle_timer()
+
+root = tk.Tk()
+app = OpeningScreen(root)
+root.mainloop()
+
